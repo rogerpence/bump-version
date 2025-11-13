@@ -27,6 +27,6 @@ go run bump-version.go
 ```
 go build bump-version.go
 .\bump-version.exe
-``
+```
 
 Go lets you build little utilities like this very quickly--which Python and PowerShell also do. Go's ace up its sleeve is that it makes it dead simple to create and deploy a Go executable. Put the executable in directory in your path and `bump-version` is always available.
