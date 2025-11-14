@@ -21,6 +21,7 @@ type PackageJSON struct {
 }
 
 func main() {
+
 	// Parse command line arguments
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <commit-message>\n", os.Args[0])
@@ -127,4 +128,17 @@ func main() {
 
 	fmt.Println("✓ Pushed tags to remote")
 	fmt.Printf("\n✅ Successfully bumped to version %s and pushed to remote!\n", newVersion)
+
+	// Create clipboard string
+	clipboardMask := "pnpm add github:%s#v%s"
+	packageName := strings.TrimPrefix(pkg.Name, "@")
+	clipboardText := fmt.Sprintf(clipboardMask, packageName, newVersion)
+
+	// Copy to clipboard
+	cmd = exec.Command("pwsh", "-command", fmt.Sprintf("Set-Clipboard -Value '%s'", clipboardText))
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Could not copy to clipboard: %v\n", err)
+	} else {
+		fmt.Printf("\n📋 Copied to clipboard: %s\n", clipboardText)
+	}
 }
