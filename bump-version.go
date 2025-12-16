@@ -5,23 +5,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 )
 
-type PackageJSON struct {
-	Name         string                 `json:"name"`
-	Version      string                 `json:"version"`
-	Type         string                 `json:"type,omitempty"`
-	Main         string                 `json:"main,omitempty"`
-	Types        string                 `json:"types,omitempty"`
-	Exports      map[string]interface{} `json:"exports,omitempty"`
-	Files        []string               `json:"files,omitempty"`
-	Dependencies map[string]string      `json:"dependencies,omitempty"`
-}
+const filePermissions = 0644 // rw-r--r--
 
 func main() {
-
 	// Parse command line arguments
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <commit-message>\n", os.Args[0])
@@ -38,18 +29,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Parse JSON
-	var pkg PackageJSON
+	// Parse JSON to get version and name (for validation and clipboard)
+	var pkg map[string]interface{}
 	err = json.Unmarshal(data, &pkg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing package.json: %v\n", err)
 		os.Exit(1)
 	}
 
+	// Get version
+	version, ok := pkg["version"].(string)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Error: version field not found or not a string\n")
+		os.Exit(1)
+	}
+
 	// Parse version
-	parts := strings.Split(pkg.Version, ".")
+	parts := strings.Split(version, ".")
 	if len(parts) != 3 {
-		fmt.Fprintf(os.Stderr, "Invalid version format: %s (expected x.y.z)\n", pkg.Version)
+		fmt.Fprintf(os.Stderr, "Invalid version format: %s (expected x.y.z)\n", version)
 		os.Exit(1)
 	}
 
@@ -63,22 +61,15 @@ func main() {
 
 	// Create new version
 	newVersion := fmt.Sprintf("%s.%s.%d", parts[0], parts[1], patch)
-	oldVersion := pkg.Version
-	pkg.Version = newVersion
+	oldVersion := version
 
 	fmt.Printf("Bumping version: %s -> %s\n", oldVersion, newVersion)
 
-	// Write updated package.json with pretty formatting
-	updatedData, err := json.MarshalIndent(pkg, "", "    ")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error marshaling package.json: %v\n", err)
-		os.Exit(1)
-	}
+	// Replace version in the original JSON string to preserve key order
+	versionPattern := regexp.MustCompile(`("version"\s*:\s*)"` + regexp.QuoteMeta(oldVersion) + `"`)
+	updatedData := versionPattern.ReplaceAll(data, []byte(`${1}"`+newVersion+`"`))
 
-	// Add newline at end of file
-	updatedData = append(updatedData, '\n')
-
-	err = os.WriteFile(packageFile, updatedData, 0644)
+	err = os.WriteFile(packageFile, updatedData, filePermissions)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing package.json: %v\n", err)
 		os.Exit(1)
@@ -131,7 +122,8 @@ func main() {
 
 	// Create clipboard string
 	clipboardMask := "pnpm add github:%s#v%s"
-	packageName := strings.TrimPrefix(pkg.Name, "@")
+	name, _ := pkg["name"].(string)
+	packageName := strings.TrimPrefix(name, "@")
 	clipboardText := fmt.Sprintf(clipboardMask, packageName, newVersion)
 
 	// Copy to clipboard
